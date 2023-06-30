@@ -8,6 +8,8 @@
 import Foundation
 
 open class HTTPServer {
+    let router = HTTPRouter()
+
     var socket: Socket?
     private var sockets = Set<Socket>()
     private let queue = DispatchQueue(label: "aoxiang.socket")
@@ -45,19 +47,27 @@ open class HTTPServer {
         self.socket?.close()
     }
 
-    private func handleConnection(_ socket: Socket) {
-        let html = "hello"
-        let httpResponse = """
-        HTTP/1.1 200 OK
-        server: Aoxiang
-        content-length: \(html.count)
+    private func dispatch(_ request: HTTPRequest) -> ([String: String], (HTTPRequest, HTTPResponse) -> Void) {
+        if let result = router.route(request.method, path: request.path) {
+            return result
+        }
 
-        \(html)
-        """
-        do {
-            try socket.write(httpResponse)
-        } catch {
-            print("Failed to send response: \(error)")
+        return ([:], { _, response in
+            response.statusCode = 404
+            response.reasonPhrase = "Not Found"
+            response.content = "Not Found"
+        })
+    }
+
+    private func handleConnection(_ socket: Socket) {
+        let parser = HTTPParser()
+        while let request = try? parser.readHttpRequest(socket) {
+            let request = request
+            request.address = try? socket.peername()
+            let (params, handler) = self.dispatch(request)
+            request.params = params
+            let response = HTTPResponse(socket: socket)
+            handler(request, response)
         }
         socket.close()
     }
