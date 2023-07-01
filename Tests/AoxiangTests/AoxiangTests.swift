@@ -2,9 +2,9 @@
 import XCTest
 
 class TestMiddleware: HTTPMiddleware {
-    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
+    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
         print("TestMiddleware start.")
-        next()
+        await next()
         print("TestMiddleware end.")
     }
 }
@@ -12,15 +12,15 @@ class TestMiddleware: HTTPMiddleware {
 final class AoxiangTests: XCTestCase {
     var server: HTTPServer!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         server = HTTPServer()
         try server.start(8080)
 
         server.use(TestMiddleware())
-        server.use { _, _, next in
+        server.use { _, _, next async in
             print("Time: \(Date())")
             print("closure middleware start.")
-            next()
+            await next()
             print("closure middleware end.")
         }
     }
@@ -41,6 +41,15 @@ final class AoxiangTests: XCTestCase {
     func test404() async throws {
         let res = await fetch("/404")
         XCTAssertEqual(res, "404 Not Found")
+    }
+
+    func testAsync() async throws {
+        server.get("/async") { _, res async in
+            res.send("hello")
+        }
+
+        let getRes = await fetch("/async")
+        XCTAssertEqual(getRes, "hello")
     }
 
     func testSampleResponse() async throws {

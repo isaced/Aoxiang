@@ -7,7 +7,7 @@
 
 import Foundation
 
-public typealias HTTPRouterHandler = (HTTPRequest, HTTPResponse) -> Void
+public typealias HTTPRouterHandler = (HTTPRequest, HTTPResponse) async -> Void
 
 class HTTPRouter: HTTPMiddleware {
     private var routes: [String: [String: HTTPRouterHandler]] = [:]
@@ -27,14 +27,14 @@ class HTTPRouter: HTTPMiddleware {
     }
 
     /// handle request
-    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
+    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
         if let handler = route(req.method, path: req.path) {
-            handler(req, res)
+            await handler(req, res)
         } else {
             res.statusCode = 404
             res.send("404 Not Found")
         }
-        next()
+        await next()
     }
 
     func extractPath(_ path: String) -> String {

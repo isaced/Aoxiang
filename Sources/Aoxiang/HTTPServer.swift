@@ -7,7 +7,8 @@
 
 import Foundation
 
-public typealias Middleware = (HTTPRequest, HTTPResponse, @escaping () -> Void) -> Void
+public typealias MiddlewareNext = () async -> Void
+public typealias Middleware = (HTTPRequest, HTTPResponse, @escaping MiddlewareNext) async -> Void
 
 open class HTTPMiddleware {
     var handler: Middleware?
@@ -16,8 +17,8 @@ open class HTTPMiddleware {
         self.handler = handler
     }
 
-    public func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
-        next()
+    public func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
+        await next()
     }
 }
 
@@ -32,8 +33,8 @@ open class HTTPServer {
     }
 
     public func use(_ middleware: @escaping Middleware) {
-        let mid = HTTPMiddleware { req, res, next in
-            middleware(req, res, next)
+        let mid = HTTPMiddleware { req, res, next async in
+            await middleware(req, res, next)
         }
         self.middleware.append(mid)
     }
@@ -48,17 +49,16 @@ open class HTTPServer {
         // start server
         self.stop()
         self.socket = try Socket(port: port)
-        let priority = DispatchQoS.QoSClass.background
-        DispatchQueue.global(qos: priority).async { [weak self] in
+        Task(priority: .background) { [weak self] in
             guard let strongSelf = self else { return }
             while let socket: Socket = try? strongSelf.socket?.accept() {
-                DispatchQueue.global(qos: priority).async { [weak self] in
+                Task(priority: .background) { [weak self] in
                     guard let strongSelf = self else { return }
                     strongSelf.queue.async {
                         strongSelf.sockets.insert(socket)
                     }
 
-                    strongSelf.handleConnection(socket)
+                    await strongSelf.handleConnection(socket)
 
                     strongSelf.queue.async {
                         strongSelf.sockets.remove(socket)
@@ -79,29 +79,29 @@ open class HTTPServer {
         self.socket?.close()
     }
 
-    private func handleConnection(_ socket: Socket) {
+    private func handleConnection(_ socket: Socket) async {
         let parser = HTTPParser()
         while let request = try? parser.readHttpRequest(socket) {
-            self.dispatch(request, response: HTTPResponse(socket: socket))
+            await self.dispatch(request, response: HTTPResponse(socket: socket))
         }
         socket.close()
     }
 
-    private func dispatch(_ request: HTTPRequest, response: HTTPResponse) {
+    private func dispatch(_ request: HTTPRequest, response: HTTPResponse) async {
         // Middleware
         var index = -1
-        func next() {
+        func next() async {
             index += 1
             if index < self.middleware.count {
                 let middleware = self.middleware[index]
                 if let handler = middleware.handler {
-                    handler(request, response, next)
+                    await handler(request, response, next)
                 } else {
-                    middleware.handle(request, response, next: next)
+                    await middleware.handle(request, response, next: next)
                 }
             }
         }
-        next()
+        await next()
     }
 }
 

@@ -10,9 +10,9 @@ import Foundation
 public class HTTPResponse {
     public var statusCode: Int = 200
     public var reasonPhrase: String = "OK"
+    public var headers = ["Server": "Aoxiang"]
     var content = ""
     var length: Int { content.count }
-    public var headers = ["Server": "Aoxiang"]
 
     private var eventSource: EventSource?
     private var headerSent = false
