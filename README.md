@@ -175,6 +175,11 @@ server.post("/send") { req, res in
 
 ## Installation
 
+### Requirements
+
+- iOS 13.0+ / macOS 10.15+ / tvOS 13.0+
+- Swift 5.4+
+
 ### Swift Package Manager
 
 - File > Swift Packages > Add Package Dependency
@@ -200,9 +205,9 @@ Aoxiang(翱翔) means "soar" in Chinese. I hope this library can help you to bui
 - `res.write()` is used to send chunked data to client, it will keep the connection alive, until you call `res.end()` manually.
 - `res.send()` is used to send data to client, it will close the connection after sending data automatically.
 
-## Contributing
+## Contact
 
-You are welcome to contribute to this project. Fork and make a Pull Request, or create an Issue if you see any problem.
+Follow and contact me on [Twitter](https://twitter.com/isacedx). If you find an issue, just [open a ticket](https://github.com/isaced/Aoxiang/issues/new). Pull requests are warmly welcome as well.
 
 ## License
 
