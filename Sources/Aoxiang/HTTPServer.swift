@@ -25,6 +25,8 @@ open class HTTPServer {
     let router = HTTPRouter()
     var middleware: [HTTPMiddleware] = []
 
+    public init() {}
+
     public func use(_ middleware: HTTPMiddleware) {
         self.middleware.append(middleware)
     }

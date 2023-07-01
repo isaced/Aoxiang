@@ -8,9 +8,9 @@
 import Foundation
 
 public struct HTTPRequestBody {
-    var bytes: [UInt8]? = nil
+    public var bytes: [UInt8]? = nil
 
-    func toString() -> String? {
+    public func toString() -> String? {
         if let bytes {
             return String(bytes: bytes, encoding: .utf8)
         }

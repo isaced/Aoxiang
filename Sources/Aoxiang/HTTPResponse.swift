@@ -8,11 +8,11 @@
 import Foundation
 
 public class HTTPResponse {
-    var statusCode: Int = 200
-    var reasonPhrase: String = "OK"
+    public var statusCode: Int = 200
+    public var reasonPhrase: String = "OK"
     var content = ""
     var length: Int { content.count }
-    var headers = ["Server": "Aoxiang"]
+    public var headers = ["Server": "Aoxiang"]
 
     private var eventSource: EventSource?
     private var headerSent = false
@@ -45,16 +45,15 @@ public class HTTPResponse {
         try? socket.write(responseHeader)
     }
 
-    func write(_ content: String) {
+    public func write(_ content: String) {
         writeHeader(["Transfer-Encoding": "chunked"])
 
         let hexLength = String(content.count, radix: 16)
-        try? socket.write(hexLength.description + "\r\n")
-        try? socket.write(content + "\r\n")
+        try? socket.write(hexLength.description + "\r\n" + content + "\r\n")
     }
 
     /// Send response to socket
-    func send(_ content: String) {
+    public func send(_ content: String) {
         self.content = content
         writeHeader()
 
@@ -63,7 +62,7 @@ public class HTTPResponse {
     }
 
     ///
-    func end() {
+    public func end() {
         if isChunked {
             try? socket.write("0\r\n\r\n")
         }
@@ -89,7 +88,7 @@ public extension HTTPResponse {
             try? socket.write("data: \(message)\r\n\r\n")
         }
 
-        func close() {
+        public func close() {
             isClosed = true
             try? socket.write("data: \r\n\r\n")
             socket.close()
