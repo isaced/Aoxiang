@@ -32,12 +32,6 @@ final class AoxiangTests: XCTestCase {
 //        // create the expectation
 //        let _ = expectation(description: "delay")
 //
-//        server.router.register("GET", path: "/stream") { _, res in
-//            res.write("hi,")
-//            res.write("Aoxiang.")
-//            res.end()
-//        }
-//
 //        waitForExpectations(timeout: 30)
 //
 //        XCTAssertNotEqual(server.socket?.sock, -1)
@@ -49,12 +43,18 @@ final class AoxiangTests: XCTestCase {
     }
 
     func testSampleResponse() async throws {
-        server.get("/testSampleResponse") { _, res in
+        server.get("/getTest") { _, res in
             res.send("hello")
         }
 
-        let res = await fetch("/testSampleResponse")
-        XCTAssertEqual(res, "hello")
+        server.post("/postTest") { _, res in
+            res.send("hello")
+        }
+
+        let getRes = await fetch("/getTest", method: "GET")
+        XCTAssertEqual(getRes, "hello")
+        let postRes = await fetch("/postTest", method: "POST")
+        XCTAssertEqual(postRes, "hello")
     }
 
     func testStreamResponse() async throws {
@@ -70,12 +70,33 @@ final class AoxiangTests: XCTestCase {
         let res = await fetch("/stream")
         XCTAssertEqual(res, "hi,Aoxiang.")
     }
+
+    func testSSE() async throws {
+        server.get("/sse") { _, res in
+            let target = res.sendEvents()
+            target.dispatchMessage("SSE Response:")
+            for i in 1 ... 10 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 * Double(i)) {
+                    target.dispatchMessage("chunk-\(i)")
+                    if i == 10 {
+                        target.close()
+                    }
+                }
+            }
+        }
+
+        // TODO：need test each chunk
+        let res = await fetch("/sse")
+        XCTAssertEqual(res, "data: SSE Response:\r\n\r\ndata: chunk-1\r\n\r\ndata: chunk-2\r\n\r\ndata: chunk-3\r\n\r\ndata: chunk-4\r\n\r\ndata: chunk-5\r\n\r\ndata: chunk-6\r\n\r\ndata: chunk-7\r\n\r\ndata: chunk-8\r\n\r\ndata: chunk-9\r\n\r\ndata: chunk-10\r\n\r\ndata: \r\n\r\n")
+    }
 }
 
 extension AoxiangTests {
-    func fetch(_ path: String) async -> String {
+    func fetch(_ path: String, method: String = "GET") async -> String {
         let url = URL(string: "http://localhost:8080" + path)!
-        let (data, _) = try! await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        let (data, _) = try! await URLSession.shared.data(for: request)
         return String(data: data, encoding: .utf8)!
     }
 }

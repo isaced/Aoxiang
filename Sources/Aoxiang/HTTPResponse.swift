@@ -13,6 +13,8 @@ public class HTTPResponse {
     var content = ""
     var length: Int { content.count }
     var headers = ["Server": "Aoxiang"]
+
+    private var eventSource: EventSource?
     private var headerSent = false
     private var isChunked: Bool {
         headers.contains(where: { $0.key.lowercased() == "transfer-encoding" && $0.value.lowercased() == "chunked" })
@@ -66,5 +68,42 @@ public class HTTPResponse {
             try? socket.write("0\r\n\r\n")
         }
         socket.close()
+    }
+}
+
+/// SSE Response
+public extension HTTPResponse {
+    class EventSource {
+        private var socket: Socket
+        private var isClosed = false
+
+        init(socket: Socket) {
+            self.socket = socket
+        }
+
+        public func dispatchMessage(_ message: String, event: String? = nil) {
+            guard !isClosed else { return }
+            if let event {
+                try? socket.write("event: \(event)\r\n")
+            }
+            try? socket.write("data: \(message)\r\n\r\n")
+        }
+
+        func close() {
+            isClosed = true
+            try? socket.write("data: \r\n\r\n")
+            socket.close()
+        }
+    }
+
+    func sendEvents() -> EventSource {
+        writeHeader([
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        ])
+
+        eventSource = EventSource(socket: socket)
+        return eventSource!
     }
 }
