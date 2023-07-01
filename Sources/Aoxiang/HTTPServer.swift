@@ -23,7 +23,6 @@ open class HTTPMiddleware {
 
 open class HTTPServer {
     let router = HTTPRouter()
-
     var middleware: [HTTPMiddleware] = []
 
     public func use(_ middleware: HTTPMiddleware) {
@@ -101,10 +100,43 @@ open class HTTPServer {
             }
         }
         next()
+    }
+}
 
-        // Router
-//        if let result = router.route(request.method, path: request.path) {
-//            return result
-//        }
+public extension HTTPServer {
+    func get(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("GET", path: path, handler: handler)
+    }
+
+    func post(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("POST", path: path, handler: handler)
+    }
+
+    func put(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("PUT", path: path, handler: handler)
+    }
+
+    func delete(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("DELETE", path: path, handler: handler)
+    }
+
+    func patch(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("PATCH", path: path, handler: handler)
+    }
+
+    func options(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("OPTIONS", path: path, handler: handler)
+    }
+
+    func head(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("HEAD", path: path, handler: handler)
+    }
+
+    func trace(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("TRACE", path: path, handler: handler)
+    }
+
+    func connect(_ path: String, handler: @escaping HTTPRouterHandler) {
+        self.router.register("CONNECT", path: path, handler: handler)
     }
 }

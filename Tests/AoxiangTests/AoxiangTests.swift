@@ -43,8 +43,13 @@ final class AoxiangTests: XCTestCase {
 //        XCTAssertNotEqual(server.socket?.sock, -1)
 //    }
 
+    func test404() async throws {
+        let res = await fetch("/404")
+        XCTAssertEqual(res, "404 Not Found")
+    }
+
     func testSampleResponse() async throws {
-        server.router.register("GET", path: "/testSampleResponse") { _, res in
+        server.get("/testSampleResponse") { _, res in
             res.send("hello")
         }
 
@@ -53,7 +58,7 @@ final class AoxiangTests: XCTestCase {
     }
 
     func testStreamResponse() async throws {
-        server.router.register("GET", path: "/stream") { _, res in
+        server.get("/stream") { _, res in
             res.write("hi,")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 res.write("Aoxiang.")
