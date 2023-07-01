@@ -7,13 +7,44 @@
 
 import Foundation
 
+public typealias Middleware = (HTTPRequest, HTTPResponse, @escaping () -> Void) -> Void
+
+open class HTTPMiddleware {
+    var handler: Middleware?
+
+    init(_ handler: Middleware? = nil) {
+        self.handler = handler
+    }
+
+    public func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
+        next()
+    }
+}
+
 open class HTTPServer {
     let router = HTTPRouter()
+
+    var middleware: [HTTPMiddleware] = []
+
+    public func use(_ middleware: HTTPMiddleware) {
+        self.middleware.append(middleware)
+    }
+
+    public func use(_ middleware: @escaping Middleware) {
+        let mid = HTTPMiddleware { req, res, next in
+            middleware(req, res, next)
+        }
+        self.middleware.append(mid)
+    }
 
     var socket: Socket?
     private var sockets = Set<Socket>()
     private let queue = DispatchQueue(label: "aoxiang.socket")
     public func start(_ port: in_port_t = 8080) throws {
+        // load router middleware
+        self.use(self.router)
+
+        // start server
         self.stop()
         self.socket = try Socket(port: port)
         let priority = DispatchQoS.QoSClass.background
@@ -47,28 +78,33 @@ open class HTTPServer {
         self.socket?.close()
     }
 
-    private func dispatch(_ request: HTTPRequest) -> ([String: String], (HTTPRequest, HTTPResponse) -> Void) {
-        if let result = router.route(request.method, path: request.path) {
-            return result
-        }
-
-        return ([:], { _, response in
-            response.statusCode = 404
-            response.reasonPhrase = "Not Found"
-            response.content = "Not Found"
-        })
-    }
-
     private func handleConnection(_ socket: Socket) {
         let parser = HTTPParser()
         while let request = try? parser.readHttpRequest(socket) {
-            let request = request
-            request.address = try? socket.peername()
-            let (params, handler) = self.dispatch(request)
-            request.params = params
-            let response = HTTPResponse(socket: socket)
-            handler(request, response)
+            self.dispatch(request, response: HTTPResponse(socket: socket))
         }
         socket.close()
+    }
+
+    private func dispatch(_ request: HTTPRequest, response: HTTPResponse) {
+        // Middleware
+        var index = -1
+        func next() {
+            index += 1
+            if index < self.middleware.count {
+                let middleware = self.middleware[index]
+                if let handler = middleware.handler {
+                    handler(request, response, next)
+                } else {
+                    middleware.handle(request, response, next: next)
+                }
+            }
+        }
+        next()
+
+        // Router
+//        if let result = router.route(request.method, path: request.path) {
+//            return result
+//        }
     }
 }

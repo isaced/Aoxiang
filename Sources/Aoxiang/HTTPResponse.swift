@@ -7,7 +7,7 @@
 
 import Foundation
 
-class HTTPResponse {
+public class HTTPResponse {
     var statusCode: Int = 200
     var reasonPhrase: String = "OK"
     var content = ""

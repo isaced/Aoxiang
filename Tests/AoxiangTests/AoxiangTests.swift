@@ -1,12 +1,27 @@
 @testable import Aoxiang
 import XCTest
 
+class TestMiddleware: HTTPMiddleware {
+    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
+        print("TestMiddleware start.")
+        next()
+        print("TestMiddleware end.")
+    }
+}
+
 final class AoxiangTests: XCTestCase {
     var server: HTTPServer!
 
     override func setUpWithError() throws {
         server = HTTPServer()
         try server.start(8080)
+
+        server.use(TestMiddleware())
+        server.use { _, _, next in
+            print("closure middleware start.")
+            next()
+            print("closure middleware end.")
+        }
     }
 
     override func tearDown() {

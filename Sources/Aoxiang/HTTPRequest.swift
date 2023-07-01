@@ -7,7 +7,7 @@
 
 import Foundation
 
-class HTTPRequest {
+public class HTTPRequest {
     public var path: String = ""
     public var queryParams: [(String, String)] = []
     public var method: String = ""

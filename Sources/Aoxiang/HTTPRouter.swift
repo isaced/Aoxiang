@@ -7,12 +7,12 @@
 
 import Foundation
 
-class HTTPRouter {
+class HTTPRouter: HTTPMiddleware {
     private var routes: [String: [String: (HTTPRequest, HTTPResponse) -> Void]] = [:]
 
-    public func route(_ method: String, path: String) -> ([String: String], (HTTPRequest, HTTPResponse) -> Void)? {
-        if let result = routes[method]?[path] {
-            return ([:], result)
+    public func route(_ method: String, path: String) -> ((HTTPRequest, HTTPResponse) -> Void)? {
+        if let handler = routes[method]?[path] {
+            return handler
         }
         return nil
     }
@@ -22,5 +22,14 @@ class HTTPRouter {
             routes[method] = [:]
         }
         routes[method]?[path] = handler
+    }
+
+    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
+        if let handler = route(req.method, path: req.path) {
+            handler(req, res)
+            next()
+        } else {
+            next()
+        }
     }
 }
