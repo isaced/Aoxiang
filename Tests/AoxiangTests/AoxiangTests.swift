@@ -18,6 +18,7 @@ final class AoxiangTests: XCTestCase {
 
         server.use(TestMiddleware())
         server.use { _, _, next in
+            print("Time: \(Date())")
             print("closure middleware start.")
             next()
             print("closure middleware end.")
@@ -57,6 +58,34 @@ final class AoxiangTests: XCTestCase {
         XCTAssertEqual(postRes, "hello")
     }
 
+    func testRquest() async throws {
+        server.post("/postParams") { req, res in
+
+            // method
+            XCTAssertEqual(req.method, "POST")
+            // method
+            XCTAssertEqual(req.path, "/postParams")
+            // query
+            XCTAssertEqual(req.query.count, 1)
+            XCTAssertEqual(req.query[0].0, "a")
+            XCTAssertEqual(req.query[0].1, "1")
+
+            res.send(req.body?.toString() ?? "")
+        }
+
+        let res = await fetch("/postParams?a=1", method: "POST", body: "hello")
+        XCTAssertEqual(res, "hello")
+    }
+
+    func testMiddleware() async throws {
+        server.get("/middleware") { _, res in
+            res.send("hello")
+        }
+
+        let res = await fetch("/middleware")
+        XCTAssertEqual(res, "hello")
+    }
+
     func testStreamResponse() async throws {
         server.get("/stream") { _, res in
             res.write("hi,")
@@ -92,10 +121,13 @@ final class AoxiangTests: XCTestCase {
 }
 
 extension AoxiangTests {
-    func fetch(_ path: String, method: String = "GET") async -> String {
+    func fetch(_ path: String, method: String = "GET", body: String? = nil) async -> String {
         let url = URL(string: "http://localhost:8080" + path)!
         var request = URLRequest(url: url)
         request.httpMethod = method
+        if let body {
+            request.httpBody = body.data(using: .utf8)
+        }
         let (data, _) = try! await URLSession.shared.data(for: request)
         return String(data: data, encoding: .utf8)!
     }

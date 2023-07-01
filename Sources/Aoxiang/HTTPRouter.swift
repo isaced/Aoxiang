@@ -16,7 +16,7 @@ class HTTPRouter: HTTPMiddleware {
         if routes[method] == nil {
             routes[method] = [:]
         }
-        routes[method]?[path] = handler
+        routes[method]?[extractPath(path)] = handler
     }
 
     private func route(_ method: String, path: String) -> (HTTPRouterHandler)? {
@@ -35,5 +35,10 @@ class HTTPRouter: HTTPMiddleware {
             res.send("404 Not Found")
         }
         next()
+    }
+
+    func extractPath(_ path: String) -> String {
+        let components = path.components(separatedBy: "?")
+        return components[0]
     }
 }

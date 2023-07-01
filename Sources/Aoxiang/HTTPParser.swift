@@ -20,11 +20,12 @@ class HTTPParser {
             throw HttpParserError.invalidStatusLine(statusLine)
         }
         let request = HTTPRequest()
+        request.address = try? socket.peername()
         request.method = statusLineTokens[0]
         let encodedPath = statusLineTokens[1].addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? statusLineTokens[1]
         let urlComponents = URLComponents(string: encodedPath)
         request.path = urlComponents?.path ?? ""
-        request.queryParams = urlComponents?.queryItems?.map { ($0.name, $0.value ?? "") } ?? []
+        request.query = urlComponents?.queryItems?.map { ($0.name, $0.value ?? "") } ?? []
         request.headers = try readHeaders(socket)
         if let contentLength = request.headers["content-length"], let contentLengthValue = Int(contentLength) {
             // Prevent a buffer overflow and runtime error trying to create an `UnsafeMutableBufferPointer` with
@@ -32,7 +33,7 @@ class HTTPParser {
             guard contentLengthValue >= 0 else {
                 throw HttpParserError.negativeContentLength
             }
-            request.body = try readBody(socket, size: contentLengthValue)
+            try request.loadBody(bytes: readBody(socket, size: contentLengthValue))
         }
         return request
     }
