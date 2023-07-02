@@ -1,28 +1,12 @@
 @testable import Aoxiang
 import XCTest
 
-class TestMiddleware: HTTPMiddleware {
-    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
-        print("TestMiddleware start.")
-        await next()
-        print("TestMiddleware end.")
-    }
-}
-
 final class AoxiangTests: XCTestCase {
     var server: HTTPServer!
 
     override func setUp() async throws {
         server = HTTPServer()
         try server.start(8080)
-
-        server.use(TestMiddleware())
-        server.use { _, _, next async in
-            print("Time: \(Date())")
-            print("closure middleware start.")
-            await next()
-            print("closure middleware end.")
-        }
     }
 
     override func tearDown() {
@@ -53,6 +37,10 @@ final class AoxiangTests: XCTestCase {
     }
 
     func testSampleResponse() async throws {
+        server.get("/") { _, res in
+            res.send("Index")
+        }
+
         server.get("/getTest") { _, res in
             res.send("hello")
         }
@@ -61,6 +49,8 @@ final class AoxiangTests: XCTestCase {
             res.send("hello")
         }
 
+        let indexRes = await fetch("/", method: "GET")
+        XCTAssertEqual(indexRes, "Index")
         let getRes = await fetch("/getTest", method: "GET")
         XCTAssertEqual(getRes, "hello")
         let postRes = await fetch("/postTest", method: "POST")
@@ -126,18 +116,5 @@ final class AoxiangTests: XCTestCase {
         // TODO：need test each chunk
         let res = await fetch("/sse")
         XCTAssertEqual(res, "data: SSE Response:\r\n\r\ndata: chunk-1\r\n\r\ndata: chunk-2\r\n\r\ndata: chunk-3\r\n\r\ndata: chunk-4\r\n\r\ndata: chunk-5\r\n\r\ndata: chunk-6\r\n\r\ndata: chunk-7\r\n\r\ndata: chunk-8\r\n\r\ndata: chunk-9\r\n\r\ndata: chunk-10\r\n\r\ndata: \r\n\r\n")
-    }
-}
-
-extension AoxiangTests {
-    func fetch(_ path: String, method: String = "GET", body: String? = nil) async -> String {
-        let url = URL(string: "http://localhost:8080" + path)!
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        if let body {
-            request.httpBody = body.data(using: .utf8)
-        }
-        let (data, _) = try! await URLSession.shared.data(for: request)
-        return String(data: data, encoding: .utf8)!
     }
 }
