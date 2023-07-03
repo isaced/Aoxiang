@@ -19,6 +19,8 @@ enum SocketError: Error {
 }
 
 /// A wrapper around the POSIX socket API.
+/// 
+/// This class is used to create a socket, bind it to a port, listen for incoming connections, and accept them.
 class Socket: Hashable, Equatable {
     let sock: Int32
 
@@ -26,6 +28,15 @@ class Socket: Hashable, Equatable {
         self.sock = sock
     }
 
+    /// Create a new socket and bind it to a port.
+    /// 
+    /// - Parameters:
+    ///   - port: The port to bind to.
+    ///   - Throws: SocketError.bindFailed if unable to bind to the port.
+    /// 
+    /// - Returns: A new Socket instance.
+    /// 
+    /// - Note: This method will throw an error if the port is already in use.
     init(port: in_port_t) throws {
         let zero = Int8(0)
         let transportLayerType = SOCK_STREAM // TCP

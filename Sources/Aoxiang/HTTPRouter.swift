@@ -9,9 +9,20 @@ import Foundation
 
 public typealias HTTPRouterHandler = (HTTPRequest, HTTPResponse) async -> Void
 
+/// A Butil-in simple router middleware
+/// 
+/// This middleware is used to route requests to different handlers.
+/// You can register a handler by calling `register` method.
+/// 
 class HTTPRouter: HTTPMiddleware {
     private var routes: [String: [String: HTTPRouterHandler]] = [:]
 
+    /// Register a handler to the router
+    /// 
+    /// - Parameters:
+    ///  - method: The HTTP method, such as `GET`, `POST`, `PUT`, `DELETE`, etc.
+    ///  - path: The path to match, such as `/`, `/users`, `/users/:id`, etc.
+    ///  - handler: The handler to handle the request.
     public func register(_ method: String, path: String, handler: @escaping HTTPRouterHandler) {
         if routes[method] == nil {
             routes[method] = [:]
@@ -26,7 +37,6 @@ class HTTPRouter: HTTPMiddleware {
         return nil
     }
 
-    /// handle request
     override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
         if let handler = route(req.method, path: req.path) {
             await handler(req, res)

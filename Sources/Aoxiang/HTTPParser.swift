@@ -12,6 +12,9 @@ enum HttpParserError: Error, Equatable {
     case negativeContentLength
 }
 
+/// HTTP request parser
+/// 
+/// This class is used to parse a HTTP request from a socket.
 class HTTPParser {
     public func readHttpRequest(_ socket: Socket) throws -> HTTPRequest {
         let statusLine = try socket.readLine()

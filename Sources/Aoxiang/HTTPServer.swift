@@ -10,6 +10,19 @@ import Foundation
 public typealias MiddlewareNext = () async -> Void
 public typealias Middleware = (HTTPRequest, HTTPResponse, @escaping MiddlewareNext) async -> Void
 
+/// Middleware class
+///
+/// You can create a middleware by subclassing `HTTPMiddleware` or just using a closure.
+/// If you want to subclass `HTTPMiddleware`, you should override `handle` method.
+/// If you want to use a closure, you can just pass it to `HTTPMiddleware` initializer.
+///
+///     let server = HTTPServer()
+///     server.use { req, res, next in
+///          print("Middleware 1")
+///          await next()
+///     }
+///     server.start(3000)
+///
 open class HTTPMiddleware {
     var handler: Middleware?
 
@@ -22,16 +35,31 @@ open class HTTPMiddleware {
     }
 }
 
+/// The HTTP server class
+///
+/// You can create a server instance by `HTTPServer()`.
+///
+///     let server = HTTPServer()
+///     server.get("/") { req, res in
+///          res.send("Hello World")
+///     }
+///     try server.start(3000)
 open class HTTPServer {
+    /// A butil-in router middleware
     let router = HTTPRouter()
+
+    /// A middleware stack
     var middleware: [HTTPMiddleware] = []
 
+    /// Create a server instance
     public init() {}
 
+    /// Add a middleware to the server, by a `HTTPMiddleware` instance.
     public func use(_ middleware: HTTPMiddleware) {
         self.middleware.append(middleware)
     }
 
+    /// Add a middleware to the server, by a closure.
     public func use(_ middleware: @escaping Middleware) {
         let mid = HTTPMiddleware { req, res, next async in
             await middleware(req, res, next)
@@ -39,9 +67,20 @@ open class HTTPServer {
         self.middleware.append(mid)
     }
 
-    var socket: Socket?
+    /// Socket instance
+    private var socket: Socket?
+
+    /// Socket set
     private var sockets = Set<Socket>()
+
+    /// Queue for socket set
     private let queue = DispatchQueue(label: "aoxiang.socket")
+
+    /// Start server on a port, default is 8080.
+    ///
+    /// - Parameter port: port number
+    /// - Throws: Socket error
+    /// - Returns: Void
     public func start(_ port: in_port_t = 8080) throws {
         // load router middleware
         self.use(self.router)
@@ -69,6 +108,7 @@ open class HTTPServer {
         }
     }
 
+    /// Stop server
     public func stop() {
         for socket in self.sockets {
             socket.close()
@@ -79,6 +119,7 @@ open class HTTPServer {
         self.socket?.close()
     }
 
+    /// Handle a connection
     private func handleConnection(_ socket: Socket) async {
         let parser = HTTPParser()
         while let request = try? parser.readHttpRequest(socket) {
@@ -87,6 +128,7 @@ open class HTTPServer {
         socket.close()
     }
 
+    /// Dispatch a request
     private func dispatch(_ request: HTTPRequest, response: HTTPResponse) async {
         // Middleware
         var index = -1
@@ -105,6 +147,7 @@ open class HTTPServer {
     }
 }
 
+/// Shortcut for register a route
 public extension HTTPServer {
     func get(_ path: String, handler: @escaping HTTPRouterHandler) {
         self.router.register("GET", path: path, handler: handler)

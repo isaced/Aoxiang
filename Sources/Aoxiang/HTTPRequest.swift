@@ -7,6 +7,10 @@
 
 import Foundation
 
+/// HTTP request body
+/// 
+/// This struct is used to store the body of a HTTP request.
+/// You can get the body as a string by calling `toString` method.
 public struct HTTPRequestBody {
     public var bytes: [UInt8]? = nil
 
@@ -18,6 +22,9 @@ public struct HTTPRequestBody {
     }
 }
 
+/// HTTP request
+/// 
+/// This class is used to store a HTTP request.
 public class HTTPRequest {
     public var path: String = ""
     public var query: [(String, String)] = []
