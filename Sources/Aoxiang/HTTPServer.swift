@@ -7,6 +7,10 @@
 
 import Foundation
 
+#if os(iOS)
+import UIKit
+#endif
+
 public typealias MiddlewareNext = () async -> Void
 public typealias Middleware = (HTTPRequest, HTTPResponse, @escaping MiddlewareNext) async -> Void
 
@@ -51,6 +55,18 @@ open class HTTPServer {
     /// A middleware stack
     var middleware: [HTTPMiddleware] = []
 
+    /// Automatically suspend in background, default is true
+    ///
+    /// If you set it to false, you should handle background task by yourself.
+    /// If you set it to true, the server will suspend automatically when app enter background,
+    /// And resume when app enter foreground.
+    /// You can change this property at any time, even when server is running.
+    ///
+    /// Note: This property only works on iOS.
+    var automaticallySuspendInBackground = true
+
+    private var port: in_port_t = 8080
+
     /// Create a server instance
     public init() {}
 
@@ -82,6 +98,8 @@ open class HTTPServer {
     /// - Throws: Socket error
     /// - Returns: Void
     public func start(_ port: in_port_t = 8080) throws {
+        self.port = port
+
         // load router middleware
         self.use(self.router)
 
@@ -106,7 +124,35 @@ open class HTTPServer {
             }
             strongSelf.stop()
         }
+
+        /// Setup background task
+        #if os(iOS)
+        if self.automaticallySuspendInBackground {
+            self.setupAutoSuspendInBackground()
+        }
+        #endif
     }
+
+    /// Setup background task
+    ///
+    /// This method only works on iOS.
+    #if os(iOS)
+    func setupAutoSuspendInBackground() {
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            guard let strongSelf = self else { return }
+            strongSelf.stop()
+        }
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
+            guard let strongSelf = self else { return }
+            try? strongSelf.start(strongSelf.port)
+        }
+    }
+
+    func removeAutoSuspendInBackground() {
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+    }
+    #endif
 
     /// Stop server
     public func stop() {
@@ -117,6 +163,10 @@ open class HTTPServer {
             self.sockets.removeAll(keepingCapacity: true)
         }
         self.socket?.close()
+
+        #if os(iOS)
+        self.removeAutoSuspendInBackground()
+        #endif
     }
 
     /// Handle a connection
