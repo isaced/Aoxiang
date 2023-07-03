@@ -63,7 +63,7 @@ open class HTTPServer {
     /// You can change this property at any time, even when server is running.
     ///
     /// Note: This property only works on iOS.
-    var automaticallySuspendInBackground = true
+    public var automaticallySuspendInBackground = true
 
     private var port: in_port_t = 8080
 
