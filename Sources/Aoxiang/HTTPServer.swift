@@ -133,29 +133,40 @@ open class HTTPServer {
         #endif
     }
 
-    /// Setup background task
-    ///
-    /// This method only works on iOS.
+
     #if os(iOS)
+
+    /// Setup Auto suspend in background (iOS only)
     func setupAutoSuspendInBackground() {
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
             guard let strongSelf = self else { return }
-            strongSelf.stop()
+            strongSelf._stop()
         }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
             guard let strongSelf = self else { return }
             try? strongSelf.start(strongSelf.port)
         }
     }
-
+    
+    /// Remove Auto suspend in background when server is stopped (iOS only)
     func removeAutoSuspendInBackground() {
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
     }
+
     #endif
 
     /// Stop server
     public func stop() {
+        #if os(iOS)
+        self.removeAutoSuspendInBackground()
+        #endif
+
+        self._stop()
+    }
+
+    /// Internal stop
+    private func _stop() {
         for socket in self.sockets {
             socket.close()
         }
@@ -163,10 +174,6 @@ open class HTTPServer {
             self.sockets.removeAll(keepingCapacity: true)
         }
         self.socket?.close()
-
-        #if os(iOS)
-        self.removeAutoSuspendInBackground()
-        #endif
     }
 
     /// Handle a connection
