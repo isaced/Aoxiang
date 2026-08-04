@@ -67,6 +67,8 @@ open class HTTPServer {
 
     private var port: in_port_t = 8080
 
+    private var backgroundTask: UIBackgroundTaskIdentifier?
+
     /// Create a server instance
     public init() {}
 
@@ -131,13 +133,16 @@ open class HTTPServer {
             self.setupAutoSuspendInBackground()
         }
         #endif
-    }
 
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            UIApplication.shared.beginBackgroundTask()
+        }
+    }
 
     #if os(iOS)
 
     /// Setup Auto suspend in background (iOS only)
-    func setupAutoSuspendInBackground() {
+    private func setupAutoSuspendInBackground() {
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
             guard let strongSelf = self else { return }
             strongSelf._stop()
@@ -147,13 +152,33 @@ open class HTTPServer {
             try? strongSelf.start(strongSelf.port)
         }
     }
-    
+
     /// Remove Auto suspend in background when server is stopped (iOS only)
-    func removeAutoSuspendInBackground() {
+    private func removeAutoSuspendInBackground() {
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
     }
 
+    private func startbackgroundTask() {
+        if self.backgroundTask == .invalid {
+            print("[Aoxiang] Did start background task")
+            self.backgroundTask = UIApplication.shared.beginBackgroundTask(expirationHandler: {
+                print("[Aoxiang] Application is being suspended while HTTPServer is still connected")
+                self.endBackgroundTask()
+            })
+        }
+    }
+
+    private func endBackgroundTask() {
+        if self.backgroundTask == .invalid {
+            if self.automaticallySuspendInBackground, UIApplication.shared.applicationState == .background {
+                print("[Aoxiang] Did end background task")
+                self._stop()
+            }
+            UIApplication.shared.endBackgroundTask(.invalid)
+            self.backgroundTask = .invalid
+        }
+    }
     #endif
 
     /// Stop server
@@ -178,6 +203,12 @@ open class HTTPServer {
 
     /// Handle a connection
     private func handleConnection(_ socket: Socket) async {
+        #if os(iOS)
+        if await UIApplication.shared.applicationState == .background {
+            self.startbackgroundTask()
+        }
+        #endif
+
         let parser = HTTPParser()
         while let request = try? parser.readHttpRequest(socket) {
             await self.dispatch(request, response: HTTPResponse(socket: socket))
