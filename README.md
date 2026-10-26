@@ -166,6 +166,13 @@ server.get("/sse") { req, res in
 }
 ```
 
+Messages may contain newlines (one `data:` line is emitted per line), and optional `event`/`id` fields are supported. Use `dispatchRetry(_:)` to send a reconnection interval hint:
+
+```swift
+target.dispatchMessage("line 1\nline 2", event: "update", id: "42")
+target.dispatchRetry(3000)
+```
+
 ## Change response header
 
 Aoxiang provides a `headers` property to help you change response header, you can set it before call `send()` or `write()`.
