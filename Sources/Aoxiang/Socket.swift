@@ -24,6 +24,9 @@ enum SocketError: Error {
 class Socket: Hashable, Equatable {
     let sock: Int32
 
+    private let closeLock = NSLock()
+    private var isClosed = false
+
     init(sock: Int32) {
         self.sock = sock
     }
@@ -85,6 +88,10 @@ class Socket: Hashable, Equatable {
     }
 
     public func close() {
+        closeLock.lock()
+        defer { closeLock.unlock() }
+        guard !isClosed else { return }
+        isClosed = true
         Darwin.close(sock)
     }
 

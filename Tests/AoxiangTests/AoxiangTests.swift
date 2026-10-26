@@ -23,7 +23,7 @@ final class AoxiangTests: XCTestCase {
 //    }
 
     func test404() async throws {
-        let res = await fetch("/404")
+        let res = try await fetch("/404")
         XCTAssertEqual(res, "404 Not Found")
     }
 
@@ -32,7 +32,7 @@ final class AoxiangTests: XCTestCase {
             res.send("hello")
         }
 
-        let getRes = await fetch("/async")
+        let getRes = try await fetch("/async")
         XCTAssertEqual(getRes, "hello")
     }
 
@@ -49,11 +49,11 @@ final class AoxiangTests: XCTestCase {
             res.send("hello")
         }
 
-        let indexRes = await fetch("/", method: "GET")
+        let indexRes = try await fetch("/", method: "GET")
         XCTAssertEqual(indexRes, "Index")
-        let getRes = await fetch("/getTest", method: "GET")
+        let getRes = try await fetch("/getTest", method: "GET")
         XCTAssertEqual(getRes, "hello")
-        let postRes = await fetch("/postTest", method: "POST")
+        let postRes = try await fetch("/postTest", method: "POST")
         XCTAssertEqual(postRes, "hello")
     }
 
@@ -72,7 +72,7 @@ final class AoxiangTests: XCTestCase {
             res.send(req.body?.toString() ?? "")
         }
 
-        let res = await fetch("/postParams?a=1", method: "POST", body: "hello")
+        let res = try await fetch("/postParams?a=1", method: "POST", body: "hello")
         XCTAssertEqual(res, "hello")
     }
 
@@ -81,7 +81,7 @@ final class AoxiangTests: XCTestCase {
             res.send("hello")
         }
 
-        let res = await fetch("/middleware")
+        let res = try await fetch("/middleware")
         XCTAssertEqual(res, "hello")
     }
 
@@ -95,7 +95,7 @@ final class AoxiangTests: XCTestCase {
         }
 
         // TODO：need test each chunk
-        let res = await fetch("/stream")
+        let res = try await fetch("/stream")
         XCTAssertEqual(res, "hi,Aoxiang.")
     }
 
@@ -114,7 +114,7 @@ final class AoxiangTests: XCTestCase {
         }
 
         // TODO：need test each chunk
-        let res = await fetch("/sse")
+        let res = try await fetch("/sse")
         XCTAssertEqual(res, "data: SSE Response:\r\n\r\ndata: chunk-1\r\n\r\ndata: chunk-2\r\n\r\ndata: chunk-3\r\n\r\ndata: chunk-4\r\n\r\ndata: chunk-5\r\n\r\ndata: chunk-6\r\n\r\ndata: chunk-7\r\n\r\ndata: chunk-8\r\n\r\ndata: chunk-9\r\n\r\ndata: chunk-10\r\n\r\ndata: \r\n\r\n")
     }
 }

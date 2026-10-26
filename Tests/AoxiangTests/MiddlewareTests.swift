@@ -24,7 +24,7 @@ final class MiddlewareTests: XCTestCase {
         }
         try server.start(8080)
 
-        let res = await fetch("/")
+        let res = try await fetch("/")
         XCTAssertEqual(res, "[GET] /")
     }
 }
