@@ -67,7 +67,9 @@ open class HTTPServer {
 
     private var port: in_port_t = 8080
 
+    #if os(iOS)
     private var backgroundTask: UIBackgroundTaskIdentifier?
+    #endif
 
     /// Create a server instance
     public init() {}
@@ -133,10 +135,6 @@ open class HTTPServer {
             self.setupAutoSuspendInBackground()
         }
         #endif
-
-        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
-            UIApplication.shared.beginBackgroundTask()
-        }
     }
 
     #if os(iOS)
