@@ -109,24 +109,31 @@ open class HTTPServer {
 
         // start server
         self.stop()
-        self.socket = try Socket(port: port)
-        Task(priority: .background) { [weak self] in
-            guard let strongSelf = self else { return }
-            while let socket: Socket = try? strongSelf.socket?.accept() {
+        let listeningSocket = try Socket(port: port)
+        self.socket = listeningSocket
+        Task(priority: .background) { [weak self, listeningSocket] in
+            while let clientSocket: Socket = try? listeningSocket.accept() {
                 Task(priority: .background) { [weak self] in
                     guard let strongSelf = self else { return }
                     strongSelf.queue.async {
-                        strongSelf.sockets.insert(socket)
+                        strongSelf.sockets.insert(clientSocket)
                     }
 
-                    await strongSelf.handleConnection(socket)
+                    await strongSelf.handleConnection(clientSocket)
 
                     strongSelf.queue.async {
-                        strongSelf.sockets.remove(socket)
+                        strongSelf.sockets.remove(clientSocket)
                     }
                 }
             }
-            strongSelf.stop()
+
+            // The accept loop exits when its listening socket is closed. Only
+            // stop the server if this loop still owns the active socket: a
+            // restart may have already installed a new listener.
+            guard let strongSelf = self else { return }
+            if strongSelf.socket === listeningSocket {
+                strongSelf.stop()
+            }
         }
 
         /// Setup background task
@@ -197,6 +204,7 @@ open class HTTPServer {
             self.sockets.removeAll(keepingCapacity: true)
         }
         self.socket?.close()
+        self.socket = nil
     }
 
     /// Handle a connection
