@@ -30,11 +30,11 @@ public typealias Middleware = (HTTPRequest, HTTPResponse, @escaping MiddlewareNe
 open class HTTPMiddleware {
     var handler: Middleware?
 
-    init(_ handler: Middleware? = nil) {
+    public init(_ handler: Middleware? = nil) {
         self.handler = handler
     }
 
-    public func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
+    open func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
         await next()
     }
 }
