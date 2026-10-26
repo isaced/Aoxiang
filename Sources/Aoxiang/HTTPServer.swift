@@ -65,6 +65,12 @@ open class HTTPServer {
     /// Note: This property only works on iOS.
     public var automaticallySuspendInBackground = true
 
+    /// Maximum accepted request body size in bytes, default is 10 MiB.
+    ///
+    /// Requests declaring a larger `Content-Length` are rejected with
+    /// `413 Content Too Large` before the body is read.
+    public var maxRequestBodySize = 10 * 1024 * 1024
+
     private var port: in_port_t = 8080
 
     #if os(iOS)
@@ -215,11 +221,46 @@ open class HTTPServer {
         }
         #endif
 
-        let parser = HTTPParser()
-        while let request = try? parser.readHttpRequest(socket) {
-            await self.dispatch(request, response: HTTPResponse(socket: socket))
+        let parser = HTTPParser(maxRequestBodySize: self.maxRequestBodySize)
+        while true {
+            do {
+                let request = try parser.readHttpRequest(socket)
+                await self.dispatch(request, response: HTTPResponse(socket: socket))
+                if socket.isClosed {
+                    break
+                }
+            } catch SocketError.connectionClosed {
+                break
+            } catch let error as HttpParserError {
+                self.sendErrorResponse(for: error, on: socket)
+                break
+            } catch {
+                self.sendErrorResponse(statusCode: 400, on: socket)
+                break
+            }
         }
         socket.close()
+    }
+
+    private func sendErrorResponse(for error: HttpParserError, on socket: Socket) {
+        let statusCode: Int
+        switch error {
+        case .bodyTooLarge:
+            statusCode = 413
+        case .headersTooLarge:
+            statusCode = 431
+        case .chunkedBodyNotSupported:
+            statusCode = 501
+        default:
+            statusCode = 400
+        }
+        self.sendErrorResponse(statusCode: statusCode, on: socket)
+    }
+
+    private func sendErrorResponse(statusCode: Int, on socket: Socket) {
+        let response = HTTPResponse(socket: socket)
+        response.statusCode = statusCode
+        response.send("\(statusCode) \(response.reasonPhrase)")
     }
 
     /// Dispatch a request
