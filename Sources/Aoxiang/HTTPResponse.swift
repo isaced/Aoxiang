@@ -188,14 +188,30 @@ public extension HTTPResponse {
         /// Dispatch a message to client
         ///
         /// - Parameters:
-        ///  - message: message to be sent
+        ///  - message: message to be sent, may contain newlines
         ///  - event: event name, optional, default is nil
-        public func dispatchMessage(_ message: String, event: String? = nil) {
+        ///  - id: event id, optional, default is nil
+        public func dispatchMessage(_ message: String, event: String? = nil, id: String? = nil) {
             guard !isClosed else { return }
             if let event {
                 try? socket.write("event: \(event)\r\n")
             }
-            try? socket.write("data: \(message)\r\n\r\n")
+            if let id {
+                try? socket.write("id: \(id)\r\n")
+            }
+            for line in message.components(separatedBy: "\n") {
+                let line = line.hasSuffix("\r") ? String(line.dropLast()) : line
+                try? socket.write("data: \(line)\r\n")
+            }
+            try? socket.write("\r\n")
+        }
+
+        /// Send a reconnection interval hint to client (`retry` field).
+        ///
+        /// - Parameter milliseconds: reconnection time in milliseconds
+        public func dispatchRetry(_ milliseconds: Int) {
+            guard !isClosed else { return }
+            try? socket.write("retry: \(milliseconds)\r\n\r\n")
         }
 
         public func close() {
