@@ -38,4 +38,5 @@ jobs:
         SDK=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
         swift build --scratch-path "$RUNNER_TEMP/build-${{ matrix.name }}" \
           --sdk "$SDK" \
-          --triple ${{ matrix.target }}
+          --triple ${{ matrix.target }} \
+          --build-tests
