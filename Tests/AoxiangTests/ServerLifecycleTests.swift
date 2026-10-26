@@ -158,3 +158,20 @@ extension ServerLifecycleTests {
         XCTAssertThrowsError(try RawHTTPClient.get("/slow", port: UInt16(port)))
     }
 }
+
+extension ServerLifecycleTests {
+    func testRapidSamePortServerReplacement() async throws {
+        let port: in_port_t = 18161
+
+        for _ in 0 ..< 10 {
+            let server = HTTPServer()
+            server.get("/ping") { _, res in
+                res.send("pong")
+            }
+            try server.start(port)
+            let body = try await body(at: "/ping", port: port)
+            XCTAssertEqual(body, "pong")
+            server.stop()
+        }
+    }
+}
