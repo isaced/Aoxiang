@@ -114,6 +114,10 @@ class Socket: Hashable, Equatable {
     }
 
     private func writeBuffer(_ pointer: UnsafeRawPointer, length: Int) throws {
+        guard !self.isClosed else {
+            throw SocketError.writeFailed("Socket is closed")
+        }
+
         var sent = 0
         while sent < length {
             let result = Darwin.write(sock, pointer + sent, Int(length - sent))

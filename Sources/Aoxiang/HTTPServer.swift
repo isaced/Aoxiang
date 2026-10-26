@@ -248,7 +248,8 @@ open class HTTPServer {
                 self.sendErrorResponse(for: error, on: socket)
                 break
             } catch {
-                self.sendErrorResponse(statusCode: 400, on: socket)
+                // Read failures on a closed or disconnected socket are not
+                // client errors and must not produce a response.
                 break
             }
         }
@@ -271,6 +272,8 @@ open class HTTPServer {
     }
 
     private func sendErrorResponse(statusCode: Int, on socket: Socket) {
+        guard !socket.isClosed else { return }
+
         let response = HTTPResponse(socket: socket)
         response.statusCode = statusCode
         response.send("\(statusCode) \(response.reasonPhrase)")
