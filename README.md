@@ -74,7 +74,13 @@ server.delete("/user") { req, res in
 }
 ```
 
-> Routes are matched exactly. Path parameters (`/users/:id`) and wildcards are not supported yet.
+> Routes support single-segment parameters such as `/users/:id`; read them from `req.params`. Exact routes take precedence over parameterized ones. Wildcards are not supported.
+
+```swift
+server.get("/users/:id") { req, res in
+    res.send("User \(req.params["id"] ?? "")")
+}
+```
 
 ## Async/Await
 
