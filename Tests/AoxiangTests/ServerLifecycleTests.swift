@@ -110,3 +110,27 @@ private final class Counter: @unchecked Sendable {
         return count
     }
 }
+
+extension ServerLifecycleTests {
+    func testWriteAfterCloseDoesNotWriteToReusedDescriptor() throws {
+        let listener = try Socket(port: 0)
+        let fd = listener.sock
+        listener.close()
+
+        let path = NSTemporaryDirectory() + "aoxiang-socket-\(UUID().uuidString)"
+        let fileDescriptor = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)
+        guard fileDescriptor >= 0 else {
+            throw RawHTTPClientError.socket("open failed: \(String(cString: strerror(errno)))")
+        }
+        defer {
+            Darwin.close(fileDescriptor)
+            unlink(path)
+        }
+        try XCTSkipUnless(fileDescriptor == fd, "File descriptor was not reused")
+
+        XCTAssertThrowsError(try listener.write("leak"))
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+        XCTAssertEqual(attributes[.size] as? Int, 0, "Write after close must not reach the reused descriptor")
+    }
+}
