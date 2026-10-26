@@ -119,19 +119,28 @@ open class HTTPServer {
         self.stop()
         let listeningSocket = try Socket(port: port)
         self.socket = listeningSocket
-        Task(priority: .background) { [weak self, listeningSocket] in
-            while let clientSocket: Socket = try? listeningSocket.accept() {
-                Task(priority: .background) { [weak self] in
-                    guard let strongSelf = self else { return }
-                    strongSelf.queue.async {
-                        strongSelf.sockets.insert(clientSocket)
-                    }
 
-                    await strongSelf.handleConnection(clientSocket)
+        // Accept on a dedicated thread: accept() blocks, and blocking calls on
+        // the Swift concurrency cooperative pool starve unrelated tasks when
+        // the pool is small.
+        let acceptThread = Thread { [weak self, listeningSocket] in
+            while let strongSelf = self, strongSelf.socket === listeningSocket {
+                do {
+                    let clientSocket = try listeningSocket.accept()
+                    Task(priority: .background) { [weak self] in
+                        guard let strongSelf = self else { return }
+                        strongSelf.queue.async {
+                            strongSelf.sockets.insert(clientSocket)
+                        }
 
-                    strongSelf.queue.async {
-                        strongSelf.sockets.remove(clientSocket)
+                        await strongSelf.handleConnection(clientSocket)
+
+                        strongSelf.queue.async {
+                            strongSelf.sockets.remove(clientSocket)
+                        }
                     }
+                } catch {
+                    break
                 }
             }
 
@@ -143,6 +152,8 @@ open class HTTPServer {
                 strongSelf.stop()
             }
         }
+        acceptThread.name = "aoxiang.accept"
+        acceptThread.start()
 
         /// Setup background task
         #if os(iOS)
