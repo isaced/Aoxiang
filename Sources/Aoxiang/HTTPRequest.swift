@@ -34,6 +34,16 @@ public class HTTPRequest {
     public var address: String? = ""
     public var params: [String: String] = [:]
 
+    /// First query value for `name`, or `nil` when absent.
+    public func queryValue(_ name: String) -> String? {
+        self.query.first(where: { $0.0 == name })?.1
+    }
+
+    /// All query values for `name`, in request order.
+    public func queryValues(_ name: String) -> [String] {
+        self.query.filter { $0.0 == name }.map(\.1)
+    }
+
     func loadBody(bytes: [UInt8]) {
         body = HTTPRequestBody(bytes: bytes)
     }

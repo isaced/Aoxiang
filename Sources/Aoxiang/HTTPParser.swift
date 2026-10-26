@@ -47,8 +47,12 @@ class HTTPParser {
         let request = HTTPRequest()
         request.address = try? socket.peername()
         request.method = statusLineTokens[0]
-        let encodedPath = statusLineTokens[1].addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? statusLineTokens[1]
-        let urlComponents = URLComponents(string: encodedPath)
+        let requestTarget = statusLineTokens[1]
+        var urlComponents = URLComponents(string: requestTarget)
+        if urlComponents == nil,
+           let encodedTarget = requestTarget.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            urlComponents = URLComponents(string: encodedTarget)
+        }
         request.path = urlComponents?.path ?? ""
         request.query = urlComponents?.queryItems?.map { ($0.name, $0.value ?? "") } ?? []
         request.headers = try readHeaders(socket)
