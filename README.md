@@ -4,12 +4,21 @@ Aoxiang(翱翔) is a lightweight HTTP server library written in Swift for iOS/ma
 ## Features
 
 - Lightweight, Zero-dependency
-- Asynchronous, Non-blocking
+- Asynchronous handler API with per-connection concurrency
 - Support HTTP/1.1
 - Support HTTP chunked transfer encoding (streaming)
 - Support SSE (Server-Sent Events)
 - Middleware support
 - Friendly API, keep it simple and easy to use
+
+## Threading and limits
+
+Aoxiang targets embedded/local servers, for example exposing a debug API or files from an app.
+
+- The accept loop runs on a dedicated thread and connections are handled concurrently, but socket reads and writes are blocking. This is not a non-blocking (NIO-style) server.
+- `res.send()` responds and closes the connection, so keep-alive and pipelining are not supported.
+- There are no read/write timeouts or connection limits.
+- Request lines are capped at 8 KiB, headers at 32 KiB / 100 fields, and request bodies at `HTTPServer.maxRequestBodySize` (10 MiB by default). Chunked request bodies are rejected with `501 Not Implemented`; chunked responses are supported.
 
 ## Hello World
 
@@ -65,6 +74,8 @@ server.delete("/user") { req, res in
 }
 ```
 
+> Routes are matched exactly. Path parameters (`/users/:id`) and wildcards are not supported yet.
+
 ## Async/Await
 
 Aoixang supports `async`/`await` to handle asynchronous operations, it makes your code more readable and easier to maintain.
@@ -101,7 +112,7 @@ This example shows a middleware function with no mount path. The function is exe
 ```swift
 server.use { req, res, next in
     print("Time: \(Date())")
-    next()
+    await next()
 }
 ```
 
@@ -109,9 +120,9 @@ Also you can use `HTTPMiddleware` to implement middleware.
 
 ```swift
 class TimeMiddleware: HTTPMiddleware {
-    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping () -> Void) {
+    override func handle(_ req: HTTPRequest, _ res: HTTPResponse, next: @escaping MiddlewareNext) async {
         print("Time: \(Date())")
-        next()
+        await next()
     }
 }
 
@@ -178,7 +189,7 @@ server.post("/send") { req, res in
 ### Requirements
 
 - iOS 13.0+ / macOS 10.15+ / tvOS 13.0+
-- Swift 5.4+
+- Swift 5.5+
 
 ### Swift Package Manager
 
@@ -204,6 +215,12 @@ Aoxiang(翱翔) means "soar" in Chinese. I hope this library can help you to bui
 
 - `res.write()` is used to send chunked data to client, it will keep the connection alive, until you call `res.end()` manually.
 - `res.send()` is used to send data to client, it will close the connection after sending data automatically.
+
+## Non-goals
+
+- TLS, HTTP/2, WebSocket
+- multipart/form-data parsing
+- Linux support (the socket layer uses Darwin APIs)
 
 ## Contact
 
