@@ -75,6 +75,8 @@ open class HTTPServer {
 
     #if os(iOS)
     private var backgroundTask: UIBackgroundTaskIdentifier?
+    private var lifecycleObservers: [NSObjectProtocol] = []
+    private(set) var isObservingLifecycle = false
     #endif
 
     /// Create a server instance
@@ -167,41 +169,47 @@ open class HTTPServer {
 
     /// Setup Auto suspend in background (iOS only)
     private func setupAutoSuspendInBackground() {
-        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+        guard !self.isObservingLifecycle else { return }
+        self.isObservingLifecycle = true
+
+        self.lifecycleObservers.append(NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
             guard let strongSelf = self else { return }
             strongSelf._stop()
-        }
-        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
+        })
+        self.lifecycleObservers.append(NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: nil) { [weak self] _ in
             guard let strongSelf = self else { return }
             try? strongSelf.start(strongSelf.port)
-        }
+        })
     }
 
     /// Remove Auto suspend in background when server is stopped (iOS only)
     private func removeAutoSuspendInBackground() {
-        NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+        for observer in self.lifecycleObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        self.lifecycleObservers.removeAll()
+        self.isObservingLifecycle = false
     }
 
     private func startbackgroundTask() {
-        if self.backgroundTask == .invalid {
-            print("[Aoxiang] Did start background task")
-            self.backgroundTask = UIApplication.shared.beginBackgroundTask(expirationHandler: {
-                print("[Aoxiang] Application is being suspended while HTTPServer is still connected")
-                self.endBackgroundTask()
-            })
-        }
+        guard self.backgroundTask == nil || self.backgroundTask == .invalid else { return }
+
+        print("[Aoxiang] Did start background task")
+        self.backgroundTask = UIApplication.shared.beginBackgroundTask(expirationHandler: { [weak self] in
+            print("[Aoxiang] Application is being suspended while HTTPServer is still connected")
+            self?.endBackgroundTask()
+        })
     }
 
     private func endBackgroundTask() {
-        if self.backgroundTask == .invalid {
-            if self.automaticallySuspendInBackground, UIApplication.shared.applicationState == .background {
-                print("[Aoxiang] Did end background task")
-                self._stop()
-            }
-            UIApplication.shared.endBackgroundTask(.invalid)
-            self.backgroundTask = .invalid
+        guard let task = self.backgroundTask, task != .invalid else { return }
+        self.backgroundTask = .invalid
+
+        if self.automaticallySuspendInBackground, UIApplication.shared.applicationState == .background {
+            print("[Aoxiang] Did end background task")
+            self._stop()
         }
+        UIApplication.shared.endBackgroundTask(task)
     }
     #endif
 
@@ -209,6 +217,7 @@ open class HTTPServer {
     public func stop() {
         #if os(iOS)
         self.removeAutoSuspendInBackground()
+        self.endBackgroundTask()
         #endif
 
         self._stop()
