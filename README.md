@@ -24,6 +24,8 @@ Zero dependency, async handlers, and an Express-style API. It is designed to emb
 - [FAQ](#faq)
 - [Development](#development)
 
+Release notes live in [CHANGELOG.md](CHANGELOG.md).
+
 ## Features
 
 - Lightweight and zero-dependency
