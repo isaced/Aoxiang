@@ -110,8 +110,10 @@ open class HTTPServer {
     public func start(_ port: in_port_t = 8080) throws {
         self.port = port
 
-        // load router middleware
-        self.use(self.router)
+        // load router middleware, once per server instance
+        if !self.middleware.contains(where: { $0 === self.router }) {
+            self.use(self.router)
+        }
 
         // start server
         self.stop()

@@ -1,5 +1,6 @@
 @testable import Aoxiang
 import Darwin
+import Foundation
 import XCTest
 
 final class ServerLifecycleTests: XCTestCase {
@@ -20,6 +21,25 @@ final class ServerLifecycleTests: XCTestCase {
         try server.start(port)
         let second = try await body(at: "/ping")
         XCTAssertEqual(second, "pong")
+    }
+
+    func testRestartDoesNotDuplicateRouter() async throws {
+        let counter = Counter()
+        let server = HTTPServer()
+        server.get("/count") { _, res in
+            counter.increment()
+            res.send("ok")
+        }
+        defer { server.stop() }
+
+        try server.start(port)
+        _ = try await body(at: "/count")
+
+        server.stop()
+        try server.start(port)
+        _ = try await body(at: "/count")
+
+        XCTAssertEqual(counter.value, 2)
     }
 
     func testStaleServerStopDoesNotCloseRestartedServer() async throws {
@@ -70,5 +90,22 @@ final class ServerLifecycleTests: XCTestCase {
         let url = URL(string: "http://127.0.0.1:\(port)\(path)")!
         let (data, _) = try await session.data(from: url)
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
     }
 }
