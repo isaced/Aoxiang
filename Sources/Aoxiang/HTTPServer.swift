@@ -234,11 +234,14 @@ open class HTTPServer {
 
     /// Internal stop
     private func _stop() {
-        for socket in self.sockets {
-            socket.close()
-        }
-        self.queue.sync {
+        let sockets: Set<Socket> = self.queue.sync {
+            let sockets = self.sockets
             self.sockets.removeAll(keepingCapacity: true)
+            return sockets
+        }
+
+        for socket in sockets {
+            socket.close()
         }
         self.socket?.close()
         self.socket = nil

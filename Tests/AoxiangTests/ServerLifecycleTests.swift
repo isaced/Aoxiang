@@ -134,3 +134,27 @@ extension ServerLifecycleTests {
         XCTAssertEqual(attributes[.size] as? Int, 0, "Write after close must not reach the reused descriptor")
     }
 }
+
+extension ServerLifecycleTests {
+    func testConcurrentRequestsDuringStopDoNotCorruptState() async throws {
+        let port: in_port_t = 18160
+        let server = HTTPServer()
+        server.get("/slow") { _, res in
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            res.send("ok")
+        }
+        try server.start(port)
+
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0 ..< 10 {
+                group.addTask {
+                    _ = try? await self.body(at: "/slow", port: port)
+                }
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+            server.stop()
+        }
+
+        XCTAssertThrowsError(try RawHTTPClient.get("/slow", port: UInt16(port)))
+    }
+}
