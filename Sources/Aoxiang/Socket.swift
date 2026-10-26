@@ -117,6 +117,13 @@ class Socket: Hashable, Equatable {
         try writeUInt8(ArraySlice(string.utf8))
     }
 
+    public func write(_ data: Data) throws {
+        try data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            try writeBuffer(baseAddress, length: buffer.count)
+        }
+    }
+
     private func writeUInt8(_ data: ArraySlice<UInt8>) throws {
         try data.withUnsafeBufferPointer {
             try writeBuffer($0.baseAddress!, length: data.count)

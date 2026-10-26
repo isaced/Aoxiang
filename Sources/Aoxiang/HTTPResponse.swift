@@ -27,8 +27,6 @@ public class HTTPResponse {
     }
 
     public var headers = ["Server": "Aoxiang"]
-    var content = ""
-    var length: Int { content.count }
 
     private var eventSource: EventSource?
     private var headerSent = false
@@ -85,11 +83,30 @@ public class HTTPResponse {
 
     /// Send string content to client, and close the connection.
     public func send(_ content: String) {
-        self.content = content
+        self.send(Data(content.utf8), contentType: "text/plain; charset=utf-8")
+    }
+
+    /// Send raw data to client, and close the connection.
+    public func send(_ data: Data, contentType: String = "application/octet-stream") {
+        if self.headers["Content-Type"] == nil {
+            self.headers["Content-Type"] = contentType
+        }
+        self.headers["Content-Length"] = String(data.count)
         writeHeader()
 
-        try? socket.write(content)
+        try? socket.write(data)
         socket.close()
+    }
+
+    /// Encode `value` as JSON, send it to client, and close the connection.
+    public func sendJSON<T: Encodable>(_ value: T) {
+        do {
+            let data = try JSONEncoder().encode(value)
+            self.send(data, contentType: "application/json")
+        } catch {
+            self.statusCode = 500
+            self.send("500 \(self.reasonPhrase)")
+        }
     }
 
     /// Send close event to client, and close the connection.
