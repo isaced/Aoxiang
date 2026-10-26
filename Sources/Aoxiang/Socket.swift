@@ -16,6 +16,8 @@ enum SocketError: Error {
     case recvFailed(String)
     case getPeerNameFailed(String)
     case getNameInfoFailed(String)
+    case lineTooLong
+    case connectionClosed
 }
 
 /// A wrapper around the POSIX socket API.
@@ -25,7 +27,13 @@ class Socket: Hashable, Equatable {
     let sock: Int32
 
     private let closeLock = NSLock()
-    private var isClosed = false
+    private var closed = false
+
+    var isClosed: Bool {
+        closeLock.lock()
+        defer { closeLock.unlock() }
+        return closed
+    }
 
     init(sock: Int32) {
         self.sock = sock
@@ -90,8 +98,8 @@ class Socket: Hashable, Equatable {
     public func close() {
         closeLock.lock()
         defer { closeLock.unlock() }
-        guard !isClosed else { return }
-        isClosed = true
+        guard !closed else { return }
+        closed = true
         Darwin.close(sock)
     }
 
@@ -125,6 +133,9 @@ class Socket: Hashable, Equatable {
     open func read() throws -> UInt8 {
         var byte: UInt8 = 0
         let count = Darwin.read(sock, &byte, 1)
+        if count == 0 {
+            throw SocketError.connectionClosed
+        }
         guard count > 0 else {
             throw SocketError.recvFailed(errorDescription())
         }
@@ -170,11 +181,16 @@ class Socket: Hashable, Equatable {
     private static let CR: UInt8 = 13
     private static let NL: UInt8 = 10
 
-    public func readLine() throws -> String {
+    public func readLine(maxLength: Int = Int.max) throws -> String {
         var characters = ""
         var index: UInt8 = 0
+        var count = 0
         repeat {
             index = try read()
+            count += 1
+            if count > maxLength {
+                throw SocketError.lineTooLong
+            }
             if index > Socket.CR { characters.append(Character(UnicodeScalar(index))) }
         } while index != Socket.NL
         return characters
