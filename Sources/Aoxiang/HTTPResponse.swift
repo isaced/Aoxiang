@@ -79,7 +79,7 @@ public class HTTPResponse {
     public func write(_ content: String) {
         writeHeader(["Transfer-Encoding": "chunked"])
 
-        let hexLength = String(content.count, radix: 16)
+        let hexLength = String(content.utf8.count, radix: 16)
         try? socket.write(hexLength.description + "\r\n" + content + "\r\n")
     }
 
