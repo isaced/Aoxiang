@@ -8,7 +8,6 @@ on:
 
 jobs:
   build:
-
     runs-on: macos-latest
 
     steps:
@@ -17,3 +16,26 @@ jobs:
       run: swift build -v
     - name: Run tests
       run: swift test -v
+
+  cross-build:
+    name: Build for ${{ matrix.name }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            sdk: iphonesimulator
+            target: arm64-apple-ios17.0-simulator
+          - name: tvOS
+            sdk: appletvsimulator
+            target: arm64-apple-tvos17.0-simulator
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: |
+        SDK=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
+        swift build --scratch-path "$RUNNER_TEMP/build-${{ matrix.name }}" \
+          -Xswiftc -sdk -Xswiftc "$SDK" \
+          -Xswiftc -target -Xswiftc ${{ matrix.target }}
