@@ -71,6 +71,12 @@ open class HTTPServer {
     /// `413 Content Too Large` before the body is read.
     public var maxRequestBodySize = 10 * 1024 * 1024
 
+    /// Socket read timeout in seconds for accepted connections, default is `0` (disabled).
+    ///
+    /// When enabled, a connection that stops sending data before the request is
+    /// complete is closed after the timeout.
+    public var readTimeout: TimeInterval = 0
+
     private var port: in_port_t = 8080
 
     #if os(iOS)
@@ -129,6 +135,9 @@ open class HTTPServer {
             while let strongSelf = self, strongSelf.socket === listeningSocket {
                 do {
                     let clientSocket = try listeningSocket.accept()
+                    if strongSelf.readTimeout > 0 {
+                        clientSocket.setReadTimeout(strongSelf.readTimeout)
+                    }
                     Task(priority: .background) { [weak self] in
                         guard let strongSelf = self else { return }
                         strongSelf.queue.async {

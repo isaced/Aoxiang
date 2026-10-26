@@ -95,6 +95,16 @@ class Socket: Hashable, Equatable {
         return Socket(sock: clientSocket)
     }
 
+    /// Set the receive timeout for blocking reads.
+    func setReadTimeout(_ seconds: TimeInterval) {
+        guard seconds > 0 else { return }
+        var timeout = timeval(
+            tv_sec: Int(seconds),
+            tv_usec: Int32((seconds - seconds.rounded(.down)) * 1_000_000)
+        )
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    }
+
     public func close() {
         closeLock.lock()
         defer { closeLock.unlock() }

@@ -17,7 +17,7 @@ Aoxiang targets embedded/local servers, for example exposing a debug API or file
 
 - The accept loop runs on a dedicated thread and connections are handled concurrently, but socket reads and writes are blocking. This is not a non-blocking (NIO-style) server.
 - `res.send()` responds and closes the connection, so keep-alive and pipelining are not supported.
-- There are no read/write timeouts or connection limits.
+- Read timeouts are opt-in via `HTTPServer.readTimeout`; there is no write timeout or connection limit.
 - Request lines are capped at 8 KiB, headers at 32 KiB / 100 fields, and request bodies at `HTTPServer.maxRequestBodySize` (10 MiB by default). Chunked request bodies are rejected with `501 Not Implemented`; chunked responses are supported.
 
 ## Hello World
