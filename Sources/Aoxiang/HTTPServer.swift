@@ -110,6 +110,9 @@ open class HTTPServer {
     /// Queue for socket set
     private let queue = DispatchQueue(label: "aoxiang.socket")
 
+    /// Signaled when the current accept loop exits
+    private var acceptLoopDone: DispatchSemaphore?
+
     /// Start server on a port, default is 8080.
     ///
     /// - Parameter port: port number
@@ -128,18 +131,33 @@ open class HTTPServer {
         let listeningSocket = try Socket(port: port)
         self.socket = listeningSocket
 
+        let acceptLoopDone = DispatchSemaphore(value: 0)
+        self.queue.sync { self.acceptLoopDone = acceptLoopDone }
+
         // Accept on a dedicated thread: accept() blocks, and blocking calls on
         // the Swift concurrency cooperative pool starve unrelated tasks when
         // the pool is small.
         let acceptThread = Thread { [weak self, listeningSocket] in
+            defer { acceptLoopDone.signal() }
+
             while let strongSelf = self, strongSelf.socket === listeningSocket {
                 do {
                     let clientSocket = try listeningSocket.accept()
+
+                    // A late accept on a recycled descriptor must not serve
+                    // connections for a newer listener.
+                    guard let strongSelf = self, strongSelf.socket === listeningSocket else {
+                        clientSocket.close()
+                        return
+                    }
                     if strongSelf.readTimeout > 0 {
                         clientSocket.setReadTimeout(strongSelf.readTimeout)
                     }
                     Task(priority: .background) { [weak self] in
-                        guard let strongSelf = self else { return }
+                        guard let strongSelf = self else {
+                            clientSocket.close()
+                            return
+                        }
                         strongSelf.queue.async {
                             strongSelf.sockets.insert(clientSocket)
                         }
@@ -160,7 +178,7 @@ open class HTTPServer {
             // restart may have already installed a new listener.
             guard let strongSelf = self else { return }
             if strongSelf.socket === listeningSocket {
-                strongSelf.stop()
+                strongSelf._stop(waitForAcceptLoop: false)
             }
         }
         acceptThread.name = "aoxiang.accept"
@@ -233,18 +251,29 @@ open class HTTPServer {
     }
 
     /// Internal stop
-    private func _stop() {
-        let sockets: Set<Socket> = self.queue.sync {
+    private func _stop(waitForAcceptLoop: Bool = true) {
+        let listeningSocket = self.socket
+        self.socket = nil
+
+        let (sockets, acceptLoopDone): (Set<Socket>, DispatchSemaphore?) = self.queue.sync {
             let sockets = self.sockets
             self.sockets.removeAll(keepingCapacity: true)
-            return sockets
+            let acceptLoopDone = self.acceptLoopDone
+            self.acceptLoopDone = nil
+            return (sockets, acceptLoopDone)
         }
 
+        listeningSocket?.close()
         for socket in sockets {
             socket.close()
         }
-        self.socket?.close()
-        self.socket = nil
+
+        // Closing wakes a blocked accept. Waiting for the loop to exit keeps
+        // the descriptor from being reused by a new listener while a stale
+        // loop could still accept on it.
+        if waitForAcceptLoop {
+            acceptLoopDone?.wait(timeout: .now() + 2)
+        }
     }
 
     /// Handle a connection
