@@ -4,9 +4,8 @@ import Foundation
 import XCTest
 
 final class ServerLifecycleTests: XCTestCase {
-    private let port: in_port_t = 18080
-
     func testRestartAfterStopServesRequests() async throws {
+        let port: in_port_t = 18100
         let server = HTTPServer()
         server.get("/ping") { _, res in
             res.send("pong")
@@ -14,16 +13,17 @@ final class ServerLifecycleTests: XCTestCase {
         defer { server.stop() }
 
         try server.start(port)
-        let first = try await body(at: "/ping")
+        let first = try await body(at: "/ping", port: port)
         XCTAssertEqual(first, "pong")
 
         server.stop()
         try server.start(port)
-        let second = try await body(at: "/ping")
+        let second = try await body(at: "/ping", port: port)
         XCTAssertEqual(second, "pong")
     }
 
     func testRestartDoesNotDuplicateRouter() async throws {
+        let port: in_port_t = 18101
         let counter = Counter()
         let server = HTTPServer()
         server.get("/count") { _, res in
@@ -33,16 +33,17 @@ final class ServerLifecycleTests: XCTestCase {
         defer { server.stop() }
 
         try server.start(port)
-        _ = try await body(at: "/count")
+        _ = try await body(at: "/count", port: port)
 
         server.stop()
         try server.start(port)
-        _ = try await body(at: "/count")
+        _ = try await body(at: "/count", port: port)
 
         XCTAssertEqual(counter.value, 2)
     }
 
     func testStaleServerStopDoesNotCloseRestartedServer() async throws {
+        let port: in_port_t = 18102
         let first = HTTPServer()
         first.get("/ping") { _, res in
             res.send("pong")
@@ -61,7 +62,7 @@ final class ServerLifecycleTests: XCTestCase {
         // exiting) must not close the descriptor now owned by the second one.
         first.stop()
 
-        let res = try await body(at: "/ping")
+        let res = try await body(at: "/ping", port: port)
         XCTAssertEqual(res, "pong")
     }
 
@@ -78,7 +79,7 @@ final class ServerLifecycleTests: XCTestCase {
         XCTAssertNotEqual(fcntl(reused.sock, F_GETFD), -1, "Second close must not close the reused descriptor")
     }
 
-    private func body(at path: String) async throws -> String {
+    private func body(at path: String, port: in_port_t) async throws -> String {
         // Use an ephemeral session so connections are not pooled across the
         // server restarts these tests exercise, and fail fast instead of
         // waiting for the 60s default when something goes wrong.
