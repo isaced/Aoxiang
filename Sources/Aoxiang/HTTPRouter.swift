@@ -21,7 +21,7 @@ class HTTPRouter: HTTPMiddleware {
     /// 
     /// - Parameters:
     ///  - method: The HTTP method, such as `GET`, `POST`, `PUT`, `DELETE`, etc.
-    ///  - path: The path to match, such as `/`, `/users`, `/users/:id`, etc.
+    ///  - path: The path to match, matched exactly, such as `/`, `/users`, etc.
     ///  - handler: The handler to handle the request.
     public func register(_ method: String, path: String, handler: @escaping HTTPRouterHandler) {
         if routes[method] == nil {
