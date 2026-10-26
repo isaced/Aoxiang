@@ -1,26 +1,65 @@
 # Aoxiang
-Aoxiang(翱翔) is a lightweight HTTP server library written in Swift for iOS/macOS/tvOS.
+
+[![Swift](https://github.com/isaced/Aoxiang/actions/workflows/swift.yml/badge.svg)](https://github.com/isaced/Aoxiang/actions/workflows/swift.yml)
+
+Aoxiang (翱翔) is a lightweight HTTP server library written in Swift for iOS / macOS / tvOS.
+
+Zero dependency, async handlers, and an Express-style API. It is designed to embed a small HTTP server inside your app — a debug bridge, a local preview server, a LAN API — not to replace Vapor.
+
+## Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Routing](#routing)
+- [Requests](#requests)
+- [Responses](#responses)
+- [Streaming and SSE](#streaming-and-sse)
+- [Middleware](#middleware)
+- [Configuration](#configuration)
+- [iOS background behavior](#ios-background-behavior)
+- [Threading model and limits](#threading-model-and-limits)
+- [Status codes](#status-codes)
+- [Non-goals](#non-goals)
+- [FAQ](#faq)
+- [Development](#development)
 
 ## Features
 
-- Lightweight, Zero-dependency
-- Asynchronous handler API with per-connection concurrency
-- Support HTTP/1.1
-- Support HTTP chunked transfer encoding (streaming)
-- Support SSE (Server-Sent Events)
-- Middleware support
-- Friendly API, keep it simple and easy to use
+- Lightweight and zero-dependency
+- `async`/`await` handler API with per-connection concurrency
+- HTTP/1.1 routing (`get`, `post`, `put`, `delete`, `patch`, …) with path parameters
+- Request parsing: method, path, query, headers, body, path parameters
+- String / `Data` / JSON responses with automatic `Content-Length` and `Content-Type`
+- HTTP chunked transfer encoding (streaming) and SSE (Server-Sent Events)
+- Express-style middleware
+- Request size limits and an opt-in read timeout
+- Automatic background suspend/resume on iOS
 
-## Threading and limits
+## Installation
 
-Aoxiang targets embedded/local servers, for example exposing a debug API or files from an app.
+### Requirements
 
-- The accept loop runs on a dedicated thread and connections are handled concurrently, but socket reads and writes are blocking. This is not a non-blocking (NIO-style) server.
-- `res.send()` responds and closes the connection, so keep-alive and pipelining are not supported.
-- Read timeouts are opt-in via `HTTPServer.readTimeout`; there is no write timeout or connection limit.
-- Request lines are capped at 8 KiB, headers at 32 KiB / 100 fields, and request bodies at `HTTPServer.maxRequestBodySize` (10 MiB by default). Chunked request bodies are rejected with `501 Not Implemented`; chunked responses are supported.
+- iOS 13.0+ / macOS 10.15+ / tvOS 13.0+
+- Swift 5.5+
 
-## Hello World
+### Swift Package Manager
+
+In Xcode: **File > Swift Packages > Add Package Dependency**, then add
+
+```
+https://github.com/isaced/Aoxiang.git
+```
+
+and select "Up to Next Major" with `1.0.0`, or add it to your `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/isaced/Aoxiang.git", .upToNextMajor(from: "1.0.0"))
+]
+```
+
+## Quick start
 
 ```swift
 import Aoxiang
@@ -34,86 +73,159 @@ server.get("/") { req, res in
 try server.start(8080)
 ```
 
-Then open your browser and visit `http://localhost:8080/` to see the result.
+Open `http://localhost:8080/` in your browser. Call `server.stop()` to close the listener and any active connections.
 
-## Basic routing
+`start(_:)` throws if the port cannot be bound, for example when it is already in use.
 
-Routing refers to how an application’s endpoints (URIs) respond to client requests. You define routing using methods of the `HTTPServer` instance that correspond to HTTP methods; for example, `get()` to handle GET requests and `post()` to handle POST requests.
+An iOS sample app lives in [`Example/`](Example).
 
-The following examples illustrate defining simple routes.
+### Async handlers
 
-Respond with `Hello World!` on the homepage:
-
-```swift
-server.get("/") { req, res in
-    res.send("hello Aoxiang!")
-}
-```
-
-Respond to POST request on the homepage:
+Route handlers are `async` closures, so you can await inside them:
 
 ```swift
-server.post("/") { req, res in
-    res.send("Got a POST request")
-}
-```
-
-Respond to a PUT request to the `/user` route:
-
-```swift
-server.put("/user") { req, res in
-    res.send("Got a PUT request at /user")
-}
-```
-
-Respond to a DELETE request to the `/user` route:
-
-```swift
-server.delete("/user") { req, res in
-    res.send("Got a DELETE request at /user")
-}
-```
-
-> Routes support single-segment parameters such as `/users/:id`; read them from `req.params`. Exact routes take precedence over parameterized ones. Wildcards are not supported.
-
-```swift
-server.get("/users/:id") { req, res in
-    res.send("User \(req.params["id"] ?? "")")
-}
-```
-
-## Async/Await
-
-Aoixang supports `async`/`await` to handle asynchronous operations, it makes your code more readable and easier to maintain.
-
-```swift
-server.get("/async") { req, res async in
+server.get("/async") { req, res in
     let user = await readUserInfo()
     res.send(user.name)
 }
 ```
 
+## Routing
+
+Register routes with the method that matches the HTTP verb:
+
+```swift
+server.get("/") { req, res in
+    res.send("hello Aoxiang!")
+}
+
+server.post("/user") { req, res in
+    res.send("Got a POST request at /user")
+}
+
+server.put("/user") { req, res in
+    res.send("Got a PUT request at /user")
+}
+
+server.delete("/user") { req, res in
+    res.send("Got a DELETE request at /user")
+}
+```
+
+`patch`, `head`, `options`, `trace`, and `connect` are available as well.
+
+### Path parameters
+
+Single-segment parameters are supported, and are read from `req.params`:
+
+```swift
+server.get("/users/:id/posts/:postId") { req, res in
+    res.send("user \(req.params["id"] ?? "") post \(req.params["postId"] ?? "")")
+}
+```
+
+- Exact routes take precedence over parameterized routes.
+- An empty segment does not match a parameter (`/users/` does not match `/users/:id`).
+- Wildcards and optional segments are not supported.
+
+A request that matches no route is answered with `404 Not Found`.
+
+## Requests
+
+`HTTPRequest` exposes the parsed request:
+
+| Property | Description |
+| --- | --- |
+| `method` | HTTP method, e.g. `"GET"` |
+| `path` | Percent-decoded path, query excluded |
+| `query` | Query items as `[(String, String)]`, in request order |
+| `queryValue(_:)` | First value for a key, `nil` when absent |
+| `queryValues(_:)` | All values for a key, duplicates preserved |
+| `params` | Path parameters for the matched route |
+| `headers` | Lowercased header names |
+| `body` | `HTTPRequestBody`: raw `bytes` and `toString()` |
+| `address` | Peer address of the connection |
+
+```swift
+server.post("/echo") { req, res in
+    let name = req.queryValue("name") ?? "anonymous"
+    res.send("\(name): \(req.body?.toString() ?? "")")
+}
+```
+
+Header names are lowercased, so read them as `req.headers["content-type"]`.
+
+## Responses
+
+```swift
+// Text (Content-Type: text/plain; charset=utf-8)
+res.send("Hello World!")
+
+// Binary (Content-Type defaults to application/octet-stream)
+res.send(pngData, contentType: "image/png")
+
+// JSON via Encodable (Content-Type: application/json)
+struct User: Codable { let id: Int; let name: String }
+res.sendJSON(User(id: 1, name: "Aoxiang"))
+```
+
+`send` always sets an accurate `Content-Length` (in UTF-8 bytes) and closes the connection. A `Content-Type` you set yourself is kept.
+
+Status and headers are set before the first `send`/`write`:
+
+```swift
+server.get("/created") { _, res in
+    res.statusCode = 201
+    res.headers["X-Trace-Id"] = "abc"
+    res.send("created")
+}
+```
+
+The reason phrase is derived from `statusCode` (`201 Created`, `404 Not Found`, …); assign `res.reasonPhrase` to override it.
+
+Every route must respond — if a handler returns without calling `send`, `write`/`end`, or `sendEvents`, the client waits until the connection is closed.
+
+## Streaming and SSE
+
+### Chunked responses
+
+`write()` sends a chunk and keeps the connection open; `end()` finishes the response and closes it.
+
+```swift
+server.get("/stream") { _, res in
+    res.write("hi,")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        res.write("Aoxiang.")
+        res.end()
+    }
+}
+```
+
+### Server-Sent Events
+
+`sendEvents()` returns an `EventSource`. Call `close()` when you are done.
+
+```swift
+server.get("/sse") { _, res in
+    let events = res.sendEvents()
+    events.dispatchMessage("SSE Response:")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        events.dispatchMessage("chunk 1")
+        events.close()
+    }
+}
+```
+
+Messages may span lines (one `data:` line per source line), and `event`/`id` are supported. `dispatchRetry(_:)` sends the reconnection interval hint:
+
+```swift
+events.dispatchMessage("line 1\nline 2", event: "update", id: "42")
+events.dispatchRetry(3000)
+```
+
 ## Middleware
 
-Middleware functions are functions that have access to the HTTP request(`req`) and response(`res`) objects, and the next function in the application’s request-response cycle. The next function is a function in the router which, when invoked, executes the middleware succeeding the current middleware.
-
-Middleware functions can perform the following tasks:
-
-- Execute any code.
-- Make changes to the request and the response objects.
-- End the request-response cycle.
-- Call the next middleware in the stack.
-
-You can use middleware for many purposes in your web application, for example:
-
-- Logging
-- Authentication
-- Error handling
-- ...
-
-Aoxiang supports middleware like [Express](https://expressjs.com/). You can use `use()` to add middleware to your server.
-
-This example shows a middleware function with no mount path. The function is executed every time the app receives a request.
+Middleware has access to the request, the response, and `next`. It can run code, mutate the request/response, end the cycle, or pass control on — useful for logging, authentication, and similar cross-cutting work.
 
 ```swift
 server.use { req, res, next in
@@ -122,7 +234,7 @@ server.use { req, res, next in
 }
 ```
 
-Also you can use `HTTPMiddleware` to implement middleware.
+Or subclass `HTTPMiddleware`:
 
 ```swift
 class TimeMiddleware: HTTPMiddleware {
@@ -135,105 +247,83 @@ class TimeMiddleware: HTTPMiddleware {
 server.use(TimeMiddleware())
 ```
 
-> The order of middleware loading is important: middleware functions that are loaded first are also executed first.
+> Order matters: middleware registered first runs first. Middleware registered before `start()` also runs before routing, so one that responds without calling `next()` short-circuits the router.
 
-## Chunked streaming
+## Configuration
 
-Aoxiang supports [HTTP chunked transfer encoding](https://en.wikipedia.org/wiki/Chunked_transfer_encoding) out of the box. You can use `write()` to send chunked data to client, and use `end()` to end the response.
-
-```swift
-server.get("/stream") { _, res in
-    res.write("hi,")
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-        res.write("Aoxiang.")
-        res.end()
-    }
-}
-```
-
-## SSE(Server-Sent Events)
-
-Aoxiang supports [SSE(Server-Sent Events)](https://html.spec.whatwg.org/multipage/server-sent-events.html#server-sent-events) out of the box. You can use `sendEvents()` to get a `EventSource` and send events to client. don't forget to call `close()` to close the connection.
+| Property | Default | Description |
+| --- | --- | --- |
+| `maxRequestBodySize` | 10 MiB | Bodies larger than this are rejected with `413` before being read |
+| `readTimeout` | `0` (disabled) | Per-connection socket read timeout in seconds; stalled connections are closed |
+| `automaticallySuspendInBackground` | `true` | iOS only, see below |
 
 ```swift
-server.get("/sse") { req, res in
-    let target = res.sendEvents()
-    target.dispatchMessage("SSE Response:")
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-        target.dispatchMessage("chunk 1")
-        target.close()
-    }
-}
+server.maxRequestBodySize = 512 * 1024
+server.readTimeout = 30
 ```
 
-Messages may contain newlines (one `data:` line is emitted per line), and optional `event`/`id` fields are supported. Use `dispatchRetry(_:)` to send a reconnection interval hint:
+## iOS background behavior
 
-```swift
-target.dispatchMessage("line 1\nline 2", event: "update", id: "42")
-target.dispatchRetry(3000)
-```
+By default the server stops itself when the app enters the background and restarts on the same port when it returns to the foreground.
 
-## Change response header
+Set `automaticallySuspendInBackground = false` if you want to manage background lifetime yourself; Aoxiang then keeps the listener open and requests a background task when a connection is handled while the app is in the background.
 
-Aoxiang provides a `headers` property to help you change response header, you can set it before call `send()` or `write()`.
+## Threading model and limits
 
-This example shows how to set a single header:
+Aoxiang targets embedded/local servers — a debug API, a local preview, a LAN endpoint from an app.
 
-```swift
-server.post("/send") { req, res in
-    res.headers["Access-Control-Allow-Origin"] = "*"
-    // ...
-}
-```
+- The accept loop runs on its own thread; each connection is handled concurrently, but socket reads and writes block. This is not an NIO-style non-blocking server.
+- `send()` closes the connection, so keep-alive and pipelining are not supported. One request per connection.
+- There is no write timeout and no connection cap; `readTimeout` limits how long a stalled read can hold a connection.
+- Limits: request line 8 KiB, headers 32 KiB / 100 fields, body `maxRequestBodySize`.
+- Chunked request bodies are not supported and are rejected with `501`; chunked responses are supported.
 
-This example shows how to set HTTP status code:
+## Status codes
 
-```swift
-server.post("/send") { req, res in
-    res.statusCode = 404
-    // ...
-}
-```
+| Code | When |
+| --- | --- |
+| `400 Bad Request` | Malformed request line or header field |
+| `404 Not Found` | No route matched |
+| `413 Content Too Large` | `Content-Length` exceeds `maxRequestBodySize` |
+| `431 Request Header Fields Too Large` | Header block exceeds the limits |
+| `500 Internal Server Error` | `sendJSON` failed to encode |
+| `501 Not Implemented` | Chunked request body |
 
-> For more customization, you can check `HTTPResponse` class.
-
-## Installation
-
-### Requirements
-
-- iOS 13.0+ / macOS 10.15+ / tvOS 13.0+
-- Swift 5.5+
-
-### Swift Package Manager
-
-- File > Swift Packages > Add Package Dependency
-- Add `https://github.com/isaced/Aoxiang.git`
-- Select "Up to Next Major" with "1.0.0"
-
-or add the following to your `Package.swift` file:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/isaced/Aoxiang.git", .upToNextMajor(from: "1.0.0"))
-]
-```
-
-## FAQ
-
-### Why named Aoxiang?
-
-Aoxiang(翱翔) means "soar" in Chinese. I hope this library can help you to build your own web server lightweight and easily.
-
-### res.send() vs res.write()
-
-- `res.write()` is used to send chunked data to client, it will keep the connection alive, until you call `res.end()` manually.
-- `res.send()` is used to send data to client, it will close the connection after sending data automatically.
+Error responses are sent and then the connection is closed.
 
 ## Non-goals
 
 - TLS, HTTP/2, WebSocket
 - multipart/form-data parsing
 - Linux support (the socket layer uses Darwin APIs)
+
+## FAQ
+
+### Why named Aoxiang?
+
+Aoxiang (翱翔) means "soar" in Chinese. I hope this library can help you to build your own web server lightweight and easily.
+
+### res.send() vs res.write()
+
+- `res.send(...)` sends the complete response and closes the connection.
+- `res.write(...)` sends one chunk and keeps the connection open until you call `res.end()`.
+
+### Can I serve files?
+
+There is no built-in static file handler yet. Read the file yourself and use `res.send(data, contentType:)`.
+
+### Is the server reachable from other devices?
+
+`start(_:)` binds `0.0.0.0`, so it is reachable on the local network. There is no TLS or authentication; keep it to trusted networks and local use.
+
+## Development
+
+```sh
+swift build
+swift test
+```
+
+CI runs the test suite on macOS and cross-compiles the package and tests for the iOS and tvOS simulators, since platform-gated code (`#if os(iOS)`) is not compiled by the macOS job.
 
 ## Contact
 
